@@ -1,0 +1,11 @@
+{
+  "title": "vocabulary",
+  "description": "Enhance your English vocabulary with an engaging letter-themed web app featuring new word addition, flashcards, and writing practice for effective learning.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
