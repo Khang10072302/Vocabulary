@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 
 type Word = {
   id: number;
@@ -22,9 +22,29 @@ const INITIAL_WORDS: Word[] = [
 ];
 
 const TAGS = ["Noun", "Verb", "Adjective", "Adverb", "Phrase", "Idiom"];
-type Section = "inbox" | "flashcard" | "writing" | "quiz" | "progress" | "add";
+type Section = "dashboard" | "inbox" | "flashcard" | "writing" | "quiz" | "progress" | "add";
+
+function DashIcon({ size, color }: { size: number; color: string }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.3" /><rect x="8.5" y="1.5" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.3" /><rect x="1.5" y="8.5" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.3" /><rect x="8.5" y="8.5" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.3" /></svg>;
+}
+function BookIcon({ size, color }: { size: number; color: string }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 2h7a1 1 0 011 1v9a1 1 0 01-1 1H3V2z" stroke={color} strokeWidth="1.3" /><path d="M10 2h1a1 1 0 011 1v9a1 1 0 01-1 1h-1" stroke={color} strokeWidth="1.3" /><path d="M5 5h4M5 7.5h4M5 10h2" stroke={color} strokeWidth="1.2" strokeLinecap="round" /></svg>;
+}
+function CardIcon({ size, color }: { size: number; color: string }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="10" height="7" rx="1.5" stroke={color} strokeWidth="1.3" /><rect x="4.5" y="5.5" width="10" height="7" rx="1.5" stroke={color} strokeWidth="1.3" strokeDasharray="2 1.5" /></svg>;
+}
+function PenIcon({ size, color }: { size: number; color: string }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3L5 14H2v-3L10.5 2.5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" /></svg>;
+}
+function QuizIcon({ size, color }: { size: number; color: string }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke={color} strokeWidth="1.3" /><path d="M6.5 6.5a1.5 1.5 0 113 0c0 1-1.5 1.5-1.5 2.5" stroke={color} strokeWidth="1.3" strokeLinecap="round" /><circle cx="8" cy="11.5" r="0.75" fill={color} /></svg>;
+}
+function ChartIcon({ size, color }: { size: number; color: string }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M2 12l3.5-4L9 10l5-6" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /><path d="M2 14h12" stroke={color} strokeWidth="1.3" strokeLinecap="round" /></svg>;
+}
 
 const NAV = [
+  { id: "dashboard" as Section, label: "Dashboard", icon: DashIcon },
   { id: "inbox" as Section, label: "Vocabulary", icon: BookIcon },
   { id: "flashcard" as Section, label: "Flashcards", icon: CardIcon },
   { id: "writing" as Section, label: "Writing", icon: PenIcon },
@@ -33,13 +53,14 @@ const NAV = [
 ];
 
 export default function App() {
-  const [section, setSection] = useState<Section>("inbox");
+  const [section, setSection] = useState<Section>("dashboard");
   const [words, setWords] = useState<Word[]>(INITIAL_WORDS);
 
   return (
     <div style={{ display: "flex", height: "100%", background: "#F5F5F7", fontFamily: "'Inter', -apple-system, sans-serif" }}>
       <Sidebar section={section} setSection={setSection} words={words} />
       <main style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        {section === "dashboard" && <DashboardSection words={words} setSection={setSection} />}
         {section === "inbox" && <InboxSection words={words} setWords={setWords} setSection={setSection} />}
         {section === "flashcard" && <FlashcardSection words={words} setWords={setWords} />}
         {section === "writing" && <WritingSection words={words} />}
@@ -140,6 +161,326 @@ function Sidebar({ section, setSection, words }: {
         </button>
       </div>
     </aside>
+  );
+}
+
+/* ─── DASHBOARD ─── */
+const HEATMAP_DATA = Array.from({ length: 16 * 7 }, () => {
+  const v = Math.random();
+  return v > 0.75 ? 4 : v > 0.55 ? 3 : v > 0.35 ? 2 : v > 0.18 ? 1 : 0;
+});
+const MONTHS = ["May", "Jun", "Jul", "Aug"];
+
+type Quest = { id: string; label: string; target: number; done: number; icon: string; color: string; section: Section };
+
+function DashboardSection({ words, setSection }: { words: Word[]; setSection: (s: Section) => void }) {
+  const mastered = words.filter(w => w.mastered).length;
+  const pct = Math.round((mastered / Math.max(words.length, 1)) * 100);
+  const totalStreak = words.reduce((a, w) => a + w.streak, 0);
+  const recentWords = [...words].slice(-3).reverse();
+  const topWord = [...words].sort((a, b) => b.streak - a.streak)[0];
+  const heatColors = ["#EAEDF0", "#BAD5F5", "#5BA4F5", "#1A73E8", "#0071E3"];
+
+  const [quests, setQuests] = useState<Quest[]>([
+    { id: "fc", label: "Review Flashcards", target: 2, done: 0, icon: "🃏", color: "#5E5CE6", section: "flashcard" },
+    { id: "wr", label: "Writing Practice", target: 2, done: 0, icon: "✒️", color: "#30D158", section: "writing" },
+    { id: "qz", label: "Complete a Quiz", target: 3, done: 0, icon: "📮", color: "#FF9F0A", section: "quiz" },
+    { id: "vb", label: "Add New Words", target: 1, done: 0, icon: "📖", color: "#0071E3", section: "add" },
+    { id: "mk", label: "Mark Words Mastered", target: 2, done: 0, icon: "⭐", color: "#FF3B30", section: "inbox" },
+  ]);
+
+  const totalQ = quests.length;
+  const doneQ = quests.filter(q => q.done >= q.target).length;
+  const questPct = Math.round((doneQ / totalQ) * 100);
+
+  const tick = (id: string) => {
+    setQuests(qs => qs.map(q => q.id === id && q.done < q.target ? { ...q, done: q.done + 1 } : q));
+  };
+
+  return (
+    <div className="fade-up" style={{ padding: "40px 48px", maxWidth: 960, margin: "0 auto", width: "100%" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 34, fontWeight: 700, color: "#1D1D1F", letterSpacing: -0.8, marginBottom: 4 }}>
+          Good morning 👋
+        </h1>
+        <p style={{ fontSize: 15, color: "#86868B" }}>
+          {topWord ? `Best streak: "${topWord.word}" — ${topWord.streak}🔥` : "Start learning your first word today."}
+        </p>
+      </div>
+
+      {/* ── PINTEREST LAYOUT ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gridTemplateRows: "auto", gap: 14, marginBottom: 16 }}>
+
+        {/* TODAY'S QUEST — spans 2 cols, prominent */}
+        <div style={{
+          gridColumn: "1 / 3", gridRow: "1 / 2",
+          background: "linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)",
+          borderRadius: 20, padding: "26px 28px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: "#F5F5F7", letterSpacing: -0.4 }}>Today's Quest</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#636366" }}>
+                {doneQ} of {totalQ} completed · {new Date().toLocaleDateString("en-GB", { weekday: "long", month: "short", day: "numeric" })}
+              </div>
+            </div>
+            {/* Ring */}
+            <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
+              <svg width="52" height="52" viewBox="0 0 52 52">
+                <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+                <circle cx="26" cy="26" r="22" fill="none" stroke="#0071E3" strokeWidth="4"
+                  strokeDasharray={`${2 * Math.PI * 22}`}
+                  strokeDashoffset={`${2 * Math.PI * 22 * (1 - questPct / 100)}`}
+                  strokeLinecap="round" transform="rotate(-90 26 26)"
+                  style={{ transition: "stroke-dashoffset 0.5s ease" }}
+                />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#F5F5F7" }}>
+                {questPct}%
+              </div>
+            </div>
+          </div>
+
+          {/* Quest items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {quests.map(q => {
+              const completed = q.done >= q.target;
+              return (
+                <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => tick(q.id)}
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                      background: completed ? q.color : "rgba(255,255,255,0.06)",
+                      border: completed ? "none" : `1.5px solid rgba(255,255,255,0.15)`,
+                      cursor: completed ? "default" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, color: "#fff",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {completed ? "✓" : ""}
+                  </button>
+                  {/* Icon + label */}
+                  <span style={{ fontSize: 14 }}>{q.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13, color: completed ? "#636366" : "#EBEBF5", fontWeight: 500, textDecoration: completed ? "line-through" : "none" }}>
+                      {q.label}
+                    </span>
+                  </div>
+                  {/* Mini progress dots */}
+                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    {Array.from({ length: q.target }, (_, i) => (
+                      <div key={i} style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: i < q.done ? q.color : "rgba(255,255,255,0.1)",
+                        transition: "background 0.2s",
+                      }} />
+                    ))}
+                  </div>
+                  {/* Go button */}
+                  {!completed && (
+                    <button
+                      onClick={() => setSection(q.section)}
+                      style={{
+                        padding: "4px 10px", borderRadius: 6, border: "none",
+                        background: `${q.color}22`, color: q.color,
+                        fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                      }}
+                    >
+                      Go →
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* VOCABULARY — tall right card */}
+        <PreviewCard
+          id="inbox" label="Vocabulary" icon={BookIcon} accent="#0071E3"
+          desc={`${words.length} words`} setSection={setSection}
+          style={{ gridColumn: "3 / 4", gridRow: "1 / 3" }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+            {recentWords.map(w => (
+              <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(0,113,227,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#0071E3", flexShrink: 0 }}>{w.word[0]}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1D1D1F", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.word}</div>
+                  <div style={{ fontSize: 11, color: "#86868B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.meaning}</div>
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop: 8, height: 1, background: "#F2F2F7" }} />
+            <div style={{ fontSize: 11, color: "#86868B" }}>
+              {words.filter(w => w.mastered).length} mastered · {words.filter(w => !w.mastered).length} learning
+            </div>
+            <div style={{ height: 5, background: "#F2F2F7", borderRadius: 99 }}>
+              <div style={{ height: "100%", borderRadius: 99, background: "#0071E3", width: `${pct}%` }} />
+            </div>
+          </div>
+        </PreviewCard>
+
+        {/* FLASHCARD — medium */}
+        <PreviewCard
+          id="flashcard" label="Flashcards" icon={CardIcon} accent="#5E5CE6"
+          desc={`${words.length - mastered} to review`} setSection={setSection}
+          style={{ gridColumn: "1 / 2", gridRow: "2 / 3" }}
+        >
+          <div style={{ position: "relative", height: 60, marginTop: 4 }}>
+            {[2, 1, 0].map(i => (
+              <div key={i} style={{
+                position: "absolute", left: i * 5, top: i * 4,
+                width: `calc(100% - ${i * 10}px)`, height: 46,
+                background: i === 0 ? "#fff" : i === 1 ? "#F0EFFE" : "#E0DFFE",
+                borderRadius: 8, border: "1px solid #E5E5EA",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: i === 0 ? "0 2px 8px rgba(0,0,0,0.07)" : "none",
+              }}>
+                {i === 0 && <span style={{ fontSize: 15, fontWeight: 700, color: "#1D1D1F", letterSpacing: -0.3 }}>{words[0]?.word}</span>}
+              </div>
+            ))}
+          </div>
+        </PreviewCard>
+
+        {/* WRITING — small */}
+        <PreviewCard
+          id="writing" label="Writing" icon={PenIcon} accent="#30D158"
+          desc="Active recall" setSection={setSection}
+          style={{ gridColumn: "2 / 3", gridRow: "2 / 3" }}
+        >
+          <div style={{ background: "#F5F5F7", borderRadius: 8, padding: "9px 11px", marginTop: 4, backgroundImage: "repeating-linear-gradient(transparent, transparent 19px, #E5E5EA 20px)", lineHeight: "20px" }}>
+            <span style={{ fontSize: 11, color: "#1D1D1F", fontStyle: "italic" }}>
+              "Youth is <span style={{ borderBottom: "1.5px solid #30D158", fontWeight: 600, fontStyle: "normal" }}>ephemeral</span>…"
+            </span>
+          </div>
+        </PreviewCard>
+
+        {/* QUIZ — wide */}
+        <PreviewCard
+          id="quiz" label="Quiz" icon={QuizIcon} accent="#FF9F0A"
+          desc="Test yourself" setSection={setSection}
+          style={{ gridColumn: "1 / 3", gridRow: "3 / 4" }}
+        >
+          <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+            <div style={{ background: "#FFF8E6", border: "1px solid #FFD60A44", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#1D1D1F", flex: 1 }}>
+              What does "Resilient" mean?
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {["Kiên cường ✓", "Phù du", "U sầu"].map((opt, i) => (
+                <div key={i} style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #E5E5EA", background: i === 0 ? "rgba(48,209,88,0.1)" : "#fff", fontSize: 11, color: i === 0 ? "#30D158" : "#86868B", fontWeight: i === 0 ? 600 : 400, whiteSpace: "nowrap" }}>
+                  {opt}
+                </div>
+              ))}
+            </div>
+          </div>
+        </PreviewCard>
+
+        {/* PROGRESS — right */}
+        <PreviewCard
+          id="progress" label="Progress" icon={ChartIcon} accent="#FF3B30"
+          desc={`${pct}% mastery`} setSection={setSection}
+          style={{ gridColumn: "3 / 4", gridRow: "3 / 4" }}
+        >
+          <div style={{ marginTop: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-around", marginBottom: 10 }}>
+              {[{ v: words.length, l: "Total", c: "#0071E3" }, { v: mastered, l: "Done", c: "#30D158" }, { v: totalStreak, l: "🔥", c: "#FF9F0A" }].map(s => (
+                <div key={s.l} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: s.c, letterSpacing: -0.5 }}>{s.v}</div>
+                  <div style={{ fontSize: 10, color: "#86868B" }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ height: 5, background: "#F2F2F7", borderRadius: 99 }}>
+              <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#0071E3,#30D158)", width: `${pct}%` }} />
+            </div>
+          </div>
+        </PreviewCard>
+      </div>
+
+      {/* ── HEATMAP ── */}
+      <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #E5E5EA", padding: "24px 28px", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#1D1D1F", letterSpacing: -0.3 }}>Study Streak</div>
+            <div style={{ fontSize: 13, color: "#86868B", marginTop: 2 }}>
+              {HEATMAP_DATA.filter(v => v > 0).length} active days in the last 16 weeks
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ fontSize: 11, color: "#86868B" }}>Less</span>
+            {heatColors.map((c, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: 3, background: c }} />)}
+            <span style={{ fontSize: 11, color: "#86868B" }}>More</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 0, marginBottom: 4, paddingLeft: 26 }}>
+          {MONTHS.map((m, i) => <div key={i} style={{ flex: 1, fontSize: 11, color: "#86868B", fontWeight: 500 }}>{m}</div>)}
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginRight: 6 }}>
+            {["Sun", "", "Tue", "", "Thu", "", "Sat"].map((d, i) => (
+              <div key={i} style={{ height: 14, fontSize: 10, color: "#86868B", lineHeight: "14px" }}>{d}</div>
+            ))}
+          </div>
+          {Array.from({ length: 16 }, (_, w) => (
+            <div key={w} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {Array.from({ length: 7 }, (_, d) => {
+                const val = HEATMAP_DATA[w * 7 + d] ?? 0;
+                return (
+                  <div key={d} title={`${val} sessions`} style={{ width: 14, height: 14, borderRadius: 3, background: heatColors[val], transition: "transform 0.1s", cursor: "default" }}
+                    onMouseOver={e => (e.currentTarget.style.transform = "scale(1.3)")}
+                    onMouseOut={e => (e.currentTarget.style.transform = "scale(1)")}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewCard({ id, label, icon: Icon, accent, desc, setSection, children, style: gridStyle }: {
+  id: Section; label: string; icon: React.FC<{size:number;color:string}>; accent: string;
+  desc: string; setSection: (s: Section) => void; children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <button
+      onClick={() => setSection(id)}
+      style={{
+        ...gridStyle,
+        background: "#fff", borderRadius: 18, border: "1px solid #E5E5EA",
+        padding: 0, cursor: "pointer", textAlign: "left",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+        overflow: "hidden", display: "flex", flexDirection: "column",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+      }}
+      onMouseOver={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; }}
+      onMouseOut={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)"; }}
+    >
+      <div style={{ padding: "15px 17px 0", display: "flex", alignItems: "center", gap: 9 }}>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: `${accent}16`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon size={15} color={accent} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{label}</div>
+          <div style={{ fontSize: 11, color: "#86868B" }}>{desc}</div>
+        </div>
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ color: "#C7C7CC", flexShrink: 0 }}><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </div>
+      <div style={{ padding: "10px 17px 16px", flex: 1 }}>{children}</div>
+    </button>
   );
 }
 
@@ -861,26 +1202,6 @@ function SearchIcon({ size, color, style: s }: { size: number; color: string; st
       <path d="M10 10l3 3" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
-}
-
-function BookIcon({ size, color }: { size: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 2h7a1 1 0 011 1v9a1 1 0 01-1 1H3V2z" stroke={color} strokeWidth="1.3" /><path d="M10 2h1a1 1 0 011 1v9a1 1 0 01-1 1h-1" stroke={color} strokeWidth="1.3" /><path d="M5 5h4M5 7.5h4M5 10h2" stroke={color} strokeWidth="1.2" strokeLinecap="round" /></svg>;
-}
-
-function CardIcon({ size, color }: { size: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="10" height="7" rx="1.5" stroke={color} strokeWidth="1.3" /><rect x="4.5" y="5.5" width="10" height="7" rx="1.5" stroke={color} strokeWidth="1.3" strokeDasharray="2 1.5" /></svg>;
-}
-
-function PenIcon({ size, color }: { size: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3L5 14H2v-3L10.5 2.5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" /></svg>;
-}
-
-function QuizIcon({ size, color }: { size: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke={color} strokeWidth="1.3" /><path d="M6.5 6.5a1.5 1.5 0 113 0c0 1-1.5 1.5-1.5 2.5" stroke={color} strokeWidth="1.3" strokeLinecap="round" /><circle cx="8" cy="11.5" r="0.75" fill={color} /></svg>;
-}
-
-function ChartIcon({ size, color }: { size: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M2 12l3.5-4L9 10l5-6" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /><path d="M2 14h12" stroke={color} strokeWidth="1.3" strokeLinecap="round" /></svg>;
 }
 
 const appleBtn: React.CSSProperties = {
